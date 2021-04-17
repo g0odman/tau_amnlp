@@ -69,7 +69,7 @@ def train(model, optimizer, wsd_train_dataset, wsd_dev_dataset, num_epochs=20, b
 
                 train_loss.append(loss.item())
                 running_mean_loss = statistics.mean(train_loss[-min(len(train_loss), 100):])
-                status_str = f'[{epoch}] loss: {running_mean_loss:.3f}'
+                status_str = f'val: {cur_val_acc:.3f}; epoch [{epoch}] loss: {running_mean_loss:.3f}'
                 prg_train.set_description(status_str)
 
     model.eval()
