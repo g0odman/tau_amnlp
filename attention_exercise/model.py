@@ -46,8 +46,9 @@ class WSDModel(nn.Module):
         weights = Q @ self.W_A @ X.transpose(-2, -1)
 
         if self.use_padding:
-            # TODO part 2: Your code here.
-            raise NotImplementedError()
+            mask = mask.unsqueeze(1)
+            mask = mask.expand(*weights.size())
+            weights[~mask] = -math.inf
 
         A = self.softmax(weights)
         Q_c =  torch.matmul(torch.matmul(A, X), self.W_O)
