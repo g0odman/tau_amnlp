@@ -74,8 +74,7 @@ class WSDModel(nn.Module):
             indices = indices.unsqueeze(1)
             Q = X.gather(1, indices)
         else:
-            # TODO Part 3: Your Code Here.
-            raise NotImplementedError()
+            Q = X
             
 
         mask = M_s.ne(self.pad_id)
