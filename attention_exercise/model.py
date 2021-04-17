@@ -43,16 +43,14 @@ class WSDModel(nn.Module):
         Q_c = None
         A = None        
         
-        # TODO Part 1: Your code here.
-        # Have a look at the difference between torch.matmul() and torch.bmm().
-        raise NotImplementedError()
+        weights = Q @ self.W_A @ X.transpose(-2, -1)
 
         if self.use_padding:
             # TODO part 2: Your code here.
             raise NotImplementedError()
 
-        # TODO Part 1: continue.
-
+        A = self.softmax(weights)
+        Q_c =  torch.matmul(torch.matmul(A, X), self.W_O)
         return Q_c, A.squeeze()
 
     def forward(self, M_s, v_q=None):
@@ -70,9 +68,10 @@ class WSDModel(nn.Module):
         
         Q = None
         if v_q is not None:
-            # TODO Part 1: Your Code Here.
-            # Look up the gather() and expand() methods in PyTorch.
-            raise NotImplementedError()
+            v_q = v_q.unsqueeze(-1)
+            indices = v_q.repeat(1, X.size()[-1])
+            indices = indices.unsqueeze(1)
+            Q = X.gather(1, indices)
         else:
             # TODO Part 3: Your Code Here.
             raise NotImplementedError()
