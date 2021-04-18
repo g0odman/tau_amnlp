@@ -7,7 +7,7 @@ import math
 class WSDModel(nn.Module):
     _MAX_RELATIVE_POSITION = 10
 
-    def __init__(self, V, Y, D=300, dropout_prob=0.2, use_padding=False, use_relative_distance=False):
+    def __init__(self, V, Y, D=300, dropout_prob=0.2, use_padding=False, use_relative_distance=False, use_causal_attention=False):
         super(WSDModel, self).__init__()
         self.use_padding = use_padding
 
@@ -27,17 +27,23 @@ class WSDModel(nn.Module):
         self.softmax = torch.nn.Softmax(dim=-1)
         self.layer_norm = nn.LayerNorm([self.D])
 
+        self.use_causal_attention = use_causal_attention
         self.use_relative_distance = use_relative_distance
         self.relative_distance_matrices = dict()
 
     def create_distance_matrix(self, N):
+        """
+        Creates a square matrix with adjusted distance weights.
+        """
         # Implementation from https://github.com/TensorUI/relative-position-pytorch/blob/master/relative_position.py
         if N in self.relative_distance_matrices:
             return self.relative_distance_matrices[N]
         range_vec = torch.arange(N)
         distance_mat = abs(range_vec[None, :] - range_vec[:, None])
         distance_mat_clipped = torch.clamp(distance_mat, -self._MAX_RELATIVE_POSITION, self._MAX_RELATIVE_POSITION)
-        final_mat = distance_mat_clipped + self._MAX_RELATIVE_POSITION
+        final_mat = distance_mat_clipped.float()
+        if self.use_causal_attention:
+            final_mat[torch.triu(torch.ones_like(distance_mat_clipped, dtype=torch.bool), 1)] = math.inf
         self.relative_distance_matrices[N] = final_mat
         return final_mat
 
