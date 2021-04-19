@@ -122,29 +122,39 @@ def __run_sample(sample, model, is_sentence_samples):
     if is_sentence_samples:
         M_s, y_true = sample
         M_s, y_true = M_s.to(device), y_true.to(device)
-        y_logits, A = model(M_s)
+        y_logits, _ = model(M_s)
         flat_y_logits = y_logits.reshape([-1, y_logits.shape[2]])
         flat_y_true = y_true.reshape(-1)
         return flat_y_logits, flat_y_true
     else:
         M_s, v_q, y_true = sample
         M_s, v_q, y_true = M_s.to(device), v_q.to(device), y_true.to(device)
-        y_logits, A = model(M_s, v_q)
+        y_logits, _ = model(M_s, v_q)
         return y_logits, y_true
 
 
-def evaluate_verbose(model, dataset, iter_lim=10, shuffle=True):
+def evaluate_verbose(model, dataset, iter_lim=10, shuffle=True, v_q_self_attention=5):
+    """evaluates the given models performance on the dataset. Works for both self-attention
+    and query-based
 
-    # TODO check self attention mode
-
+    Args:
+        model (nn.Module): The model to evaluate
+        dataset (data.DataSet): The dataset over which to evaluate the model
+        iter_lim (int, optional): Maximum number of batches to iterate. Defaults to 10.
+        shuffle (bool, optional): whether or not to shuffle the samples. Defaults to True.
+        v_q_self_attention (int, optional): In self-attention models, the 
+        index of the word to visualize in the given sentence. Defaults to 5.
+    """
+    batch_size = 100
     g = data.DataLoader(
         dataset,
-        batch_size=100,
+        batch_size=batch_size,
         shuffle=shuffle,
     )
 
     tokens_vocab = dataset.tokens_vocab
     y_vocab = dataset.y_vocab
+    self_attention = dataset.sample_type == 'sentence'
 
     correct = 0
     total = 0
@@ -158,14 +168,22 @@ def evaluate_verbose(model, dataset, iter_lim=10, shuffle=True):
     y_pred_probs = []
     y_pred_losss = []
 
-    for i, (M_s, v_q, y_true) in enumerate(g):
+    for i, q in enumerate(g):
         if iter_lim is not None and i >= iter_lim:
             break
-
-        M_s, v_q, y_true = M_s.to(device), v_q.to(device), y_true.to(device)
-        y_logits, A = model(M_s, v_q)
+        
+        if not self_attention:
+            M_s, v_q, y_true = q
+            M_s, v_q, y_true = M_s.to(device), v_q.to(device), y_true.to(device)
+            y_logits, A = model(M_s, v_q)
+        else:
+            M_s, y_true = q
+            v_q = torch.LongTensor([v_q_self_attention] * M_s.shape[0]) # Just look at the fifth word. Don't pass it to the model
+            M_s, y_true = M_s.to(device), y_true.to(device)
+            y_logits, A = model(M_s)
+            y_logits = y_logits.reshape([-1, y_logits.shape[2]])
+            y_true = y_true.reshape(-1)
         _, y_pred = torch.max(y_logits.data, 1)
-
         correct += (y_pred == y_true).sum()
         total += y_true.size(0)
 
@@ -176,13 +194,19 @@ def evaluate_verbose(model, dataset, iter_lim=10, shuffle=True):
             q_tokens.append(html.escape(tokens_vocab.decode(M_s[j][v_q[j]])))
 
         v_qs.append(v_q.cpu().numpy())
-        y_true_np = y_true.cpu().numpy()
-        y_trues.append(y_true_np)
-        y_preds.append(y_pred.cpu().numpy())
-        As.append(A.detach().cpu().numpy())
-
         probs = nn.Softmax(dim=1)(y_logits).detach().cpu().numpy()
-        y_probs = probs[range(len(probs)), y_true_np]
+        if self_attention:
+            sentence_length = A.shape[-1]
+            y_true_np = y_true.cpu().numpy()[v_q_self_attention::sentence_length]
+            y_preds.append(y_pred.cpu().numpy()[v_q_self_attention::sentence_length])
+            As.append(A.detach().cpu().numpy()[:,v_q_self_attention,:])
+            y_probs = probs[range(v_q_self_attention,len(y_true_np),sentence_length), y_true_np]
+        else:
+            y_true_np = y_true.cpu().numpy()
+            y_preds.append(y_pred.cpu().numpy())
+            As.append(A.detach().cpu().numpy())
+            y_probs = probs[range(len(probs)), y_true_np]
+        y_trues.append(y_true_np)
         y_pred_probs.append(y_probs)
         y_pred_losss.append(-np.log(y_probs + 1e-7))
 
