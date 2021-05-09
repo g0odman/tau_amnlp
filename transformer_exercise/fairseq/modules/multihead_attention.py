@@ -372,6 +372,10 @@ class MultiheadAttention(nn.Module):
         assert v is not None
         attn = torch.bmm(attn_probs, v)
         assert list(attn.size()) == [bsz * self.num_heads, tgt_len, self.head_dim]
+
+        if self.head_to_mask != -1:
+            attn[self.get_head_mask(tgt_len, bsz)] = 0
+
         if self.onnx_trace and attn.size(1) == 1:
             # when ONNX tracing a single decoder step (sequence length == 1)
             # the transpose is a no-op copy before view, thus unnecessary
@@ -379,8 +383,6 @@ class MultiheadAttention(nn.Module):
         else:
             attn = attn.transpose(0, 1).contiguous().view(tgt_len, bsz, embed_dim)
 
-        if self.head_to_mask != -1:
-            attn[self.get_head_mask(tgt_len)] = 0
         attn = self.out_proj(attn)
         attn_weights: Optional[Tensor] = None
         if need_weights:
@@ -393,15 +395,15 @@ class MultiheadAttention(nn.Module):
 
         return attn, attn_weights
 
-    def get_head_mask(self, tgt_len):
+    def get_head_mask(self, tgt_len, bsz):
         assert 0 <= self.head_to_mask < self.num_heads, 'Invalid head to mask supplied'
         if tgt_len in self.head_masks:
-            return self.head_masks[tgt_len]
-        head_mask_size = [1, tgt_len, self.head_dim]
-        head_masks = [torch.zeros(head_mask_size) for _ in range(self.num_heads)]
-        head_masks[self.head_to_mask] = torch.ones(head_mask_size)
+            return self.head_masks[(tgt_len, bsz)]
+        head_mask_size = [bsz, tgt_len, self.head_dim]
+        head_masks = [torch.zeros(head_mask_size, dtype=bool) for _ in range(self.num_heads)]
+        head_masks[self.head_to_mask] = torch.ones(head_mask_size, dtype=bool)
         head_mask = torch.cat(head_masks, 0)
-        self.head_masks[tgt_len] = head_mask
+        self.head_masks[(tgt_len, bsz)] = head_mask
         return head_mask
 
 
