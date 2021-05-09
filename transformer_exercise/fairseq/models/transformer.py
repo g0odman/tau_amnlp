@@ -406,6 +406,9 @@ class TransformerEncoder(FairseqEncoder):
         self.layers.extend(
             [self.build_encoder_layer(args) for i in range(args.encoder_layers)]
         )
+        if args.mask_layer_type == 'enc-enc':
+            assert 0 <= args.mask_layer < args.encoder_layers, 'Invalid encoder mask layer supplied'
+            self.layers[args.mask_layer].set_mask_head(args.mask_head)
         self.num_layers = len(self.layers)
 
         if args.encoder_normalize_before:
@@ -726,6 +729,12 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                 for _ in range(args.decoder_layers)
             ]
         )
+        if args.mask_layer_type == 'enc-dec':
+            assert 0 <= args.mask_layer < args.encoder_layers, 'Invalid encoder decoder mask layer supplied'
+            self.layers[args.mask_layer].set_encoder_mask_head(args.mask_head)
+        if args.mask_layer_type == 'dec-dec':
+            assert 0 <= args.mask_layer < args.encoder_layers, 'Invalid decoder mask layer supplied'
+            self.layers[args.mask_layer].set_mask_head(args.mask_head)
         self.num_layers = len(self.layers)
 
         if args.decoder_normalize_before and not getattr(

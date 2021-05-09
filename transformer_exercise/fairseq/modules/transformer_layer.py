@@ -86,6 +86,9 @@ class TransformerEncoderLayer(nn.Module):
             qn_block_size=self.quant_noise_block_size,
         )
 
+    def set_mask_head(self, mask_head):
+        self.self_attn.head_to_mask = mask_head
+
     def residual_connection(self, x, residual):
         return residual + x
 
@@ -237,6 +240,12 @@ class TransformerDecoderLayer(nn.Module):
         self.need_attn = True
 
         self.onnx_trace = False
+
+    def set_mask_head(self, mask_head):
+        self.self_attn.head_to_mask = mask_head
+
+    def set_encoder_mask_head(self, mask_head):
+        self.encoder_attn.head_to_mask = mask_head
 
     def build_fc1(self, input_dim, output_dim, q_noise, qn_block_size):
         return quant_noise(nn.Linear(input_dim, output_dim), q_noise, qn_block_size)

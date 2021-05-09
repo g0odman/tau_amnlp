@@ -37,12 +37,15 @@ class MultiheadAttention(nn.Module):
         encoder_decoder_attention=False,
         q_noise=0.0,
         qn_block_size=8,
+        head_to_mask=-1
     ):
         super().__init__()
         self.embed_dim = embed_dim
         self.kdim = kdim if kdim is not None else embed_dim
         self.vdim = vdim if vdim is not None else embed_dim
         self.qkv_same_dim = self.kdim == embed_dim and self.vdim == embed_dim
+        self.head_to_mask = head_to_mask
+        self.head_masks = dict()
 
         self.num_heads = num_heads
         self.dropout_module = FairseqDropout(
@@ -375,6 +378,9 @@ class MultiheadAttention(nn.Module):
             attn = attn.contiguous().view(tgt_len, bsz, embed_dim)
         else:
             attn = attn.transpose(0, 1).contiguous().view(tgt_len, bsz, embed_dim)
+
+        if self.head_to_mask != -1:
+            attn[self.get_head_mask(tgt_len)] = 0
         attn = self.out_proj(attn)
         attn_weights: Optional[Tensor] = None
         if need_weights:
@@ -386,6 +392,18 @@ class MultiheadAttention(nn.Module):
                 attn_weights = attn_weights.mean(dim=0)
 
         return attn, attn_weights
+
+    def get_head_mask(self, tgt_len):
+        assert 0 <= self.head_to_mask < self.num_heads, 'Invalid head to mask supplied'
+        if tgt_len in self.head_masks:
+            return self.head_masks[tgt_len]
+        head_mask_size = [1, tgt_len, self.head_dim]
+        head_masks = [torch.zeros(head_mask_size) for _ in range(self.num_heads)]
+        head_masks[self.head_to_mask] = torch.ones(head_mask_size)
+        head_mask = torch.cat(head_masks, 0)
+        self.head_masks[tgt_len] = head_mask
+        return head_mask
+
 
     @staticmethod
     def _append_prev_key_padding_mask(
