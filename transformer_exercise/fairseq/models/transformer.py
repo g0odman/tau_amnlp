@@ -405,7 +405,7 @@ class TransformerEncoder(FairseqEncoder):
         else:
             self.layers = nn.ModuleList([])
         if args.enc_layer_configuration:
-            assert len(args.enc_layer_configuration) * 2 == args.encoder_layers, 'Invalid enc layer configuration'
+            assert len(args.enc_layer_configuration) == args.encoder_layers * 2, 'Invalid enc layer configuration'
             self.layers.extend(
                 [self.build_encoder_half_layer(args, c) for c in args.enc_layer_configuration]
             )
